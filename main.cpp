@@ -12,9 +12,8 @@ class Entity {
     int nivel;
     string nombre;
     vector<string> recursos;
-    friend class CommandCenter ;
     public:
-    Entity(double x,double y,int _nivel,int _energia,int _vida,vector<string> _re, string n):
+    Entity(double x,double y,int _nivel,int _vida,vector<string> _re, string n):
     posicion_x(x),posicion_y(y),nivel(_nivel),vida(_vida), recursos(_re), nombre(n){}
 
     void mover(double dx, double dy) {
@@ -41,12 +40,12 @@ class Entity {
     }
 
     void reset() {
-        vida = 0;
+        vida = 100;
         posicion_x = 0;
         posicion_y = 0;
         recursos.clear();
-        nombre="";
-        nivel=0;
+        nombre="reset";
+        nivel=1;
     }
 
     void setNombre(string n) {
@@ -62,6 +61,20 @@ class Entity {
 
     int getNivel() {
         return nivel;
+    }
+
+    string getNombre() {
+        return nombre;
+    }
+
+    pair<double, double> getPosicion()
+    {
+        return {posicion_x, posicion_y};
+    }
+
+    vector<string> getRecursos()
+    {
+        return recursos;
     }
 
     void estado()
@@ -96,10 +109,13 @@ class RecursoFunctor
     RecursoFunctor(Entity& e,int c):entidad(e),cantidad(c){}
     void operator()(const list<string>& argumentos)
     {
-        if (argumentos.empty()) return;
+        if (argumentos.size()!=1)
+        {
+            cout<<"El argumento que pases requiere de un argumento"<<endl;
+            return;
+        }
         entidad.agregarRecurso(argumentos.front());
         cantidad++;
-        cout<<"Se agrego "<<cantidad<<" recurso"<<endl;
     }
 };
 
@@ -120,44 +136,46 @@ class CommandCenter {
     }
 
     void eliminar_comando(const string& nombre) {
-        if (comandos.find(nombre)!=comandos.end())
+        if (comandos.erase(nombre))
         {
-            comandos.erase(nombre);
-            cout<<"Se elimino el comando "<<nombre<<endl;
+            cout << "Se elimino el comando "<<nombre<<endl;
         }
     }
 
     void ejecutar(string nombre,list<string> argumento) {
-        map<string,Command>::iterator it=comandos.find(nombre);
-        if (it!=comandos.end())
-        {
-            int Vidaantes=entidad->getVida();
-            it->second(argumento);
-            int Vidadespues=entidad->getVida();
+        auto it = comandos.find(nombre);
 
-            string registro="Comando: "+ nombre + ", Estado antes: "+to_string(Vidaantes)+" Estado despues: "+to_string(Vidadespues);
-            for (list<string>::iterator it=argumento.begin();it!=argumento.end();it++)
-            {
-                registro+=" "+*it;
-            }
-
-            registro+=" | Antes: "+to_string(Vidaantes)+" Despues: "+to_string(Vidadespues);
-            historial.push_back(registro);
-        }else
-        {
-            cout << "Error, el comando"<<nombre<<" no existe"<<endl;
+        if (it==comandos.end()) {
+            cout << "Error: comando '"<<nombre<<"' no existe"<<endl;
+            return;
         }
+
+        int antes = entidad->getVida();
+
+        it->second(argumento);
+
+        int despues = entidad->getVida();
+
+        string registro = "Comando: " + nombre;
+        registro += " | Antes: " + to_string(antes);
+        registro += " | Despues: " + to_string(despues);
+
+        if (!argumento.empty()) {
+            registro += " | Args:";
+            for (auto& a: argumento) registro += " " + a;
+        }
+
+        historial.push_back(registro);
     }
 
     void registerMacro (const string & name,const list <pair<string ,list <string>>>& steps)
     {
-        if (macros.find(name)!=macros.end())
+        if (macros.count(name))
         {
-            cerr << "Macro "<<name<<" ya existe"<<endl;
+            cout << "Macro "<<name<<" ya existe"<<endl;
             return;
         }
         macros[name]=steps;
-        cout << "Macro "<<name<<" creada"<<endl;
     };
     void executeMacro ( const string & name )
     {
@@ -171,50 +189,23 @@ class CommandCenter {
         list<pair<string, list<string>>>::iterator itStep;
         for (itStep=it->second.begin();itStep!=it->second.end();itStep++)
         {
-            string nombre=itStep->first;
-            list<string> argumentos=itStep->second;
-            if (comandos.find(nombre)==comandos.end())
-            {
-                cout << "Comando "<<nombre<<" no existe"<<endl;
-                break;
+            if (!comandos.count(itStep->first)) {
+                cout<<"Error en macro: comando "<<itStep->first<<" no existe"<<endl;
+                return;
             }
-            ejecutar(nombre,argumentos);
+
+            ejecutar(itStep->first,itStep->second);
         }
-
-    } ;
-
-
+        }
     void mostrar_historial() {
         cout<<"------------------------------"<<endl;
         cout<<"Historial de comandos"<<endl;
-        list<string>::iterator it;
-        for (it=historial.begin();it!=historial.end();it++)
-        {
-            cout<<*it<<endl;
-        }
-    }
-    void mostrar_entidad() {
-        entidad->mostrar_nombre();
-    }
-    void mostrar_vida() {
-        cout << entidad->getVida() << endl;
-    }
-    void mostrar_nivel() {
-        cout << entidad->getNivel() << endl;
-    }
-    void mostrar_posicion() {
-        cout << entidad->posicion_x << " " << entidad->posicion_y << endl;
-    }
-    void mostrar_recursos() {
-        for (auto& r: entidad->recursos) {
-            cout << r << endl;
-        }
-    }
-    void mostrar_nombre() {
-        cout << entidad->nombre << endl;
+        for (auto&h: historial)
+            cout<<h<<endl;
     }
 
-};
+} ;
+
 
 class HealCenter {
 private:
@@ -225,9 +216,9 @@ public:
     HealCenter(Entity& e): entidad(e), contador(0) {}
 
     void operator()(const list<string>& argumentos) {
-        if (argumentos.empty())
+        if (argumentos.size()!=1)
         {
-            cout<<"El argumento que pases debe ser un numero "<<endl;
+            cout<<"El argumento que pases requiere de un argumento"<<endl;
             return;
         } try
         {
@@ -237,7 +228,8 @@ public:
             cout << "Se curaron " << contador << " veces"<<endl;
         }catch (...)
         {
-        cout<<"El argumento que pases debe ser un numero "<<endl;}
+        cout<<"El argumento que pases debe ser un numero "<<endl;
+        }
     }
 };
 
@@ -266,29 +258,39 @@ void cambiar_nombre(Entity& e, const list<string>& arg)
 
 
 int main() {
-    Entity Saiyajin(0, 0, 1, 100, 100, {}, "Son Goku");
+    Entity Saiyajin(0, 0,1, 100, {}, "Son Goku");
     CommandCenter center(&Saiyajin);
 
 
-    center.registrar("levelup", [](const list<string>& args) {});
     center.registrar("subir_nivel", [&](const list<string>& a){ subirNivel(Saiyajin, a); });
     center.registrar("saludo", [&](const list<string>& a){ saludo(Saiyajin, a); });
-    center.registrar("rename", [&](const list<string>& a){ cambiar_nombre(Saiyajin, a); });
+
 
 
     center.registrar("move", [&](const list<string>& args) {
-        if (args.size() < 2) return;
+        if (args.size()!=2)
+        {
+            cout<<"El comando move requiere dos argumentos"<<endl;
+            return;
+        }
         try {
             auto it = args.begin();
             double dx = stod(*it++);
             double dy = stod(*it);
             Saiyajin.mover(dx, dy);
-        } catch (...) { cout << "Error: Coordenadas invalidas." << endl; }
+        } catch (...)
+        {
+            cout << "Error: Coordenadas invalidas." << endl;
+        }
     });
 
 
     center.registrar("damage", [&](const list<string>& args) {
-        if (args.empty()) return;
+       if (args.size()!=1)
+       {
+           cout<<"El comando damage requiere un argumento"<<endl;
+           return;
+       }
         try { Saiyajin.danio(stoi(args.front())); }
         catch (...) { cout << "Error: Valor de danio invalido." << endl; }
     });
@@ -298,26 +300,44 @@ int main() {
         Saiyajin.estado();
     });
 
+    center.registrar("reset", [&](const list<string>& args)
+    {
+        if (!args.empty())
+        {
+            cout<<"El comando reset no recibe argumentos"<<endl;
+            return;
+        }
+        Saiyajin.reset();
+    });
+
+    center.registrar("rename", [&](const list<string>& args)
+    {
+        if (args.size()!=1)
+        {
+            cout<<"El comando rename requiere 1 argumentos"<<endl;
+            return;
+        }
+        Saiyajin.setNombre(args.front());
+    });
+
     center.registrar("loot", RecursoFunctor(Saiyajin, 0));
     center.registrar("heal", HealCenter(Saiyajin));
     center.registrar("contar", ContadorAcciones());
 
 
     center.registerMacro("inicio", {
-        {"saludo", {}},
         {"status", {}},
         {"heal", {"20"}}
     });
 
     center.registerMacro("explorar", {
-        {"move", {"15", "30"}},
-        {"loot", {"kamehameha"}},
+        {"move", {"10", "5"}},
+        {"loot", {"ki"}},
         {"contar", {}}
     });
 
-    // Macro 3: Subida de rango
-    center.registerMacro("evolucion", {
-        {"rename", {"Goku"}},
+    center.registerMacro("full", {
+        {"reset", {}},
         {"subir_nivel", {}},
         {"status", {}}
     });
@@ -328,11 +348,9 @@ int main() {
 
     center.ejecutar("damage", {"15"});
 
-    center.ejecutar(" semillas del ermitanio", {"100"});
+    center.ejecutar("comando_invalido", {"100"});
 
     center.eliminar_comando("contar");
-
-    center.executeMacro("evolucion");
 
     center.mostrar_historial();
 
